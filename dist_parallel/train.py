@@ -18,7 +18,7 @@ import torch.multiprocessing as mp
 import torch.utils.data.distributed
 
 from model import pyramidnet
-import argparse
+import argparses
 from tensorboardX import SummaryWriter
 
 
