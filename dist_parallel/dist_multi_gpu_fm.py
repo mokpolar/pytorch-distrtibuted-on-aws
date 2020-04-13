@@ -18,11 +18,12 @@ import torch.distributed as dist
 import torch.multiprocessing as mp
 import torch.utils.data.distributed
 
+from torchvision.models.resnet import ResNet, BasicBlock
 import argparse
 from tensorboardX import SummaryWriter
 
 
-from torchvision.models.resnet import ResNet, BasicBlock
+
 
 
 
@@ -30,12 +31,12 @@ parser = argparse.ArgumentParser(description='Fashion MNIST classification model
 parser.add_argument('--lr', default=0.1, help='')
 parser.add_argument('--resume', default=None, help='')
 parser.add_argument('--batch_size', type=int, default=32, help='')
-parser.add_argument('--num_worker', type=int, default=2, help='')
+parser.add_argument('--num_workers', type=int, default=8, help='')
 parser.add_argument("--gpu_devices", type=int, nargs='+', default=None, help="")
 
 parser.add_argument('--gpu', default=None, type=int, help='GPU id to use.')
 parser.add_argument('--dist-url', default='tcp://52.23.194.120:8889', type=str, help='')
-parser.add_argument('--dist-backend', default='nccl', type=str, help='') # backend. in this case I use nccl. 
+parser.add_argument('--dist_backend', default='nccl', type=str, help='') # backend. in this case I use nccl. 
 parser.add_argument('--rank', default=0, type=int, help='') # numbers of node. I will Use 4 terminals. node0 : 0, 1, node1 : 2, 3
 parser.add_argument('--world_size', default=2, type=int, help='') # use 1 when I use local only
 parser.add_argument('--distributed', action='store_true', help='') 
@@ -56,10 +57,9 @@ class MnistResNet(ResNet):
 def main():
 
     args = parser.parse_args()
-
     ngpus_per_node = torch.cuda.device_count()
 
-    args.world_size = ngpus_per_node * args.world_size
+    args.world_size = ngpus_per_node * args.world_size # 16
     mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
 
 
@@ -88,7 +88,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     
     # define loss function (criterion) and optimizer 
-    criterion = nn.CrossEntropyLoss().cuda() 
+    criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(net.parameters(), args.lr, momentum=0.9, weight_decay=1e-4)
 
     print("Initialize Dataloaders...")
@@ -100,7 +100,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # Download and load the training data
     trainset = datasets.FashionMNIST(root = './data', download=True, train=True, transform=transform)
-    valset = datasets.FashionMNIST(root = './data', download=True, train=False, transform=transform)
+    #valset = datasets.FashionMNIST(root = './data', download=True, train=False, transform=transform)
 
     # need sampler for distributed training
     train_sampler = torch.utils.data.distributed.DistributedSampler(trainset)
@@ -110,7 +110,7 @@ def main_worker(gpu, ngpus_per_node, args):
     train_loader = DataLoader(trainset, batch_size=args.batch_size, 
                               shuffle=(train_sampler is None), num_workers=args.num_workers, 
                               sampler=train_sampler)
-    val_loader = torch.utils.data.DataLoader(valset, batch_size=args.batch_size, shuffle=True, num_workers = args.num_worker, pin_memory = False)
+    #val_loader = torch.utils.data.DataLoader(valset, batch_size=args.batch_size, shuffle=True, num_workers = args.num_workers, pin_memory = False)
     
 
 
@@ -130,8 +130,8 @@ def train(net, criterion, optimizer, train_loader, device):
     for batch_idx, (inputs, targets) in enumerate(train_loader):
         start = time.time()
         
-        inputs = inputs.to(device)
-        targets = targets.to(device)
+        inputs = inputs.cuda(device)
+        targets = targets.cuda(device)
         outputs = net(inputs)
         loss = criterion(outputs, targets)
 
